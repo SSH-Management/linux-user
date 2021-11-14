@@ -21,7 +21,7 @@ type (
 	}
 
 	UnixInterface interface {
-		Create(context.Context, User) (User, error)
+		Create(context.Context, Creater) (User, error)
 		Delete(context.Context, string) error
 	}
 )
