@@ -2,7 +2,6 @@ package user
 
 import (
 	"context"
-	"log"
 	"os/exec"
 	osuser "os/user"
 	"strconv"
@@ -27,7 +26,7 @@ type (
 	}
 )
 
-func NewUnixService(sudoGroup map[string]string, logger *log.Logger) UnixService {
+func NewUnixService(sudoGroup map[string]string) UnixService {
 	return UnixService{
 		sudoGroup: sudoGroup,
 	}
