@@ -8,10 +8,16 @@ import (
 	"strings"
 )
 
+var _ UnixInterface = &UnixService{}
 
 type (
 	UnixService struct {
-		sudoGroup map[string]string
+		groups map[string]string
+		logger Logger
+	}
+
+	Logger interface{
+		Print(string, ...interface{})
 	}
 
 	User struct {
@@ -26,9 +32,16 @@ type (
 	}
 )
 
-func NewUnixService(sudoGroup map[string]string) UnixService {
-	return UnixService{
-		sudoGroup: sudoGroup,
+func NewUnixService(groups map[string]string, logger ...Logger) *UnixService {
+	var l Logger = nil
+
+	if len(logger) > 0 {
+		l = logger[0]
+	}
+
+	return &UnixService{
+		groups: groups,
+		logger: l,
 	}
 }
 
@@ -36,7 +49,7 @@ func (s UnixService) mapSystemGroups(groups []string) []string {
 	newGroups := make([]string, 0, len(groups))
 
 	for _, group := range groups {
-		if replace, ok := s.sudoGroup[group]; ok {
+		if replace, ok := s.groups[group]; ok {
 			newGroups = append(newGroups, replace)
 		} else {
 			newGroups = append(newGroups, group)
@@ -65,17 +78,34 @@ func (s UnixService) Create(ctx context.Context, user Creater) (User, error) {
 
 	err := cmd.Run()
 
-	if err != nil {
+	if status := cmd.ProcessState.ExitCode(); status != 0 {
+		err, ok := createCommandFail[status]
+
+		if ok {
+			if s.logger != nil {
+				s.logger.Print("error while running the create user command, Exit Status: %d, Error: %v", status, err)
+			}
+
+			return User{}, err
+		}
+
 		return User{}, ErrCommandFailed
 	}
 
-	if status := cmd.ProcessState.ExitCode(); status != 0 {
-		return User{}, createCommandFail[status]
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Print("error while running the create user command: %v", err)
+		}
+		return User{}, ErrCommandFailed
 	}
 
 	u, err := osuser.Lookup(user.GetUsername())
 
 	if err != nil {
+		if s.logger != nil {
+			s.logger.Print("cannot find user on the system: %v", err)
+		}
+
 		return User{},err
 	}
 

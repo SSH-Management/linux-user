@@ -1,0 +1,79 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the README at:
+// https://github.com/microsoft/vscode-dev-containers/tree/v0.205.2/containers/go
+{
+    "name": "Go",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "args": {
+            // Update the VARIANT arg to pick a version of Go: 1, 1.16, 1.17
+            // Append -bullseye or -buster to pin to an OS version.
+            // Use -bullseye variants on local arm64/Apple Silicon.
+            "VARIANT": "1.17-bullseye",
+            // Options
+            "NODE_VERSION": "none"
+        }
+    },
+    "runArgs": [],
+    // Set *default* container specific settings.json values on container create.
+    "settings": {
+        "go.useLanguageServer": true,
+        "go.autocompleteUnimportedPackages": true,
+        "go.gotoSymbol.includeImports": true,
+        "go.inferGopath": true,
+        "go.gotoSymbol.includeGoroot": true,
+        "go.coverOnSave": true,
+        "go.vetOnSave": "workspace",
+        "go.coverMode": "atomic",
+        "go.addTags": {
+            "tags": "json,bson,yaml",
+            "promptForTags": true
+        },
+        "go.formatTool": "gofumports",
+        "go.coverOnSingleTest": true,
+        "go.coverOnSingleTestFile": true,
+        "go.coverShowCounts": true,
+        "go.enableCodeLens": {
+            "references": true,
+            "runtest": true
+        },
+        "gopls": {
+            "expandWorkspaceToModule": true,
+            "experimentalWorkspaceModule": true,
+            "gofumpt": true
+        },
+        "go.toolsManagement.autoUpdate": true,
+        "[go]": {
+            "editor.defaultFormatter": "golang.go"
+        },
+    },
+    // Add the IDs of extensions you want installed when the container is created.
+    "extensions": [
+        "golang.Go",
+        "mikestead.dotenv",
+        "usernamehw.errorlens",
+        "rpinski.shebang-snippets",
+        "redhat.vscode-yaml",
+        "visualstudioexptteam.vscodeintellicode",
+        "christian-kohler.path-intellisense",
+        "wayou.vscode-todo-highlight",
+        "remisa.shellman",
+        "bungcip.better-toml",
+        "tamasfe.even-better-toml",
+        "eamodio.gitlens",
+        "plex.vscode-protolint",
+        "zxh404.vscode-proto3",
+        "ricardoerikson.vscode-go-impl-methods",
+        "aldijav.golangwithdidi"
+    ],
+    // Use 'forwardPorts' to make a list of ports inside the container available locally.
+    // "forwardPorts": [],
+    // Use 'postCreateCommand' to run commands after the container is created.
+    // "postCreateCommand": "go version",
+    // Comment out connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
+    "remoteUser": "root",
+    "features": {
+        "docker-from-docker": "20.10",
+        "git": "os-provided",
+        "sshd": "latest"
+    },
+}
