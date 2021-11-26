@@ -131,12 +131,26 @@ func (s UnixService) Delete(ctx context.Context, userName string) error {
 
 	err := cmd.Run()
 
-	if err != nil {
+	if status := cmd.ProcessState.ExitCode(); status != 0 {
+		err, ok := deleteCommandFail[status]
+
+		if !ok {
+			return ErrCommandFailed
+		}
+
+		if s.logger != nil {
+			s.logger.Print("error while running the delete user command, Exit Status: %d, Error: %v", status, err)
+		}
+
 		return err
 	}
 
-	if status := cmd.ProcessState.ExitCode(); status != 0 {
-		return deleteCommandFail[status]
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Print("error while running the delete user command: %v", err)
+		}
+
+		return ErrCommandFailed
 	}
 
 	return nil
