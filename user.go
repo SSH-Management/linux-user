@@ -2,156 +2,56 @@ package user
 
 import (
 	"context"
-	"os/exec"
-	osuser "os/user"
-	"strconv"
-	"strings"
+	"errors"
+	"os/user"
 )
 
-var _ UnixInterface = &UnixService{}
+var ErrUsernameEmpty = errors.New("username cannot be empty string")
 
-type (
-	UnixService struct {
-		groups map[string]string
-		logger Logger
-	}
+type User struct {
+	UserId     int
+	GroupId    int
+	HomeFolder string
+	Username   string
 
-	Logger interface{
-		Print(string, ...interface{})
-	}
-
-	User struct {
-		UserId     int
-		GroupId    int
-		HomeFolder string
-	}
-
-	UnixInterface interface {
-		Create(context.Context, Creater) (User, error)
-		Delete(context.Context, string) error
-	}
-)
-
-func NewUnixService(groups map[string]string, logger ...Logger) *UnixService {
-	var l Logger = nil
-
-	if len(logger) > 0 {
-		l = logger[0]
-	}
-
-	return &UnixService{
-		groups: groups,
-		logger: l,
-	}
+	groups         []string
+	invertedGroups map[string]string
 }
 
-func (s UnixService) mapSystemGroups(groups []string) []string {
-	newGroups := make([]string, 0, len(groups))
-
-	for _, group := range groups {
-		if replace, ok := s.groups[group]; ok {
-			newGroups = append(newGroups, replace)
-		} else {
-			newGroups = append(newGroups, group)
-		}
+func (s User) GetSystemGroups(ctx context.Context) ([]string, error) {
+	if s.groups != nil {
+		return s.groups, nil
 	}
 
-	return newGroups
-}
-
-func (s UnixService) Create(ctx context.Context, user Creater) (User, error) {
-	systemGroups := s.mapSystemGroups(user.GetSystemGroups())
-
-	cmd := exec.CommandContext(
-		ctx,
-		AddCommand,
-		"--create-home",
-		"--password",
-		user.GetPlainTextPassword(),
-		"--groups",
-		strings.Join(systemGroups, ","),
-		"--shell",
-		user.GetDefaultShell(),
-		"--user-group",
-		user.GetUsername(),
-	)
-
-	err := cmd.Run()
-
-	if status := cmd.ProcessState.ExitCode(); status != 0 {
-		err, ok := createCommandFail[status]
-
-		if ok {
-			if s.logger != nil {
-				s.logger.Print("error while running the create user command, Exit Status: %d, Error: %v", status, err)
-			}
-
-			return User{}, err
-		}
-
-		return User{}, ErrCommandFailed
+	if s.Username == "" {
+		return nil, ErrUsernameEmpty
 	}
 
+	u, err := user.Lookup(s.Username)
 	if err != nil {
-		if s.logger != nil {
-			s.logger.Print("error while running the create user command: %v", err)
+		if _, ok := err.(user.UnknownUserError); ok {
+			return nil, ErrUserDoesNotExist
 		}
-		return User{}, ErrCommandFailed
+		return nil, ErrCommandFailed
 	}
 
-	u, err := osuser.Lookup(user.GetUsername())
-
+	groups, err := u.GroupIds()
 	if err != nil {
-		if s.logger != nil {
-			s.logger.Print("cannot find user on the system: %v", err)
-		}
-
-		return User{},err
+		return nil, ErrGroupDoesNotExist
 	}
 
-	userId, _ := strconv.ParseInt(u.Uid, 10, 64)
-	groupId, _ := strconv.ParseInt(u.Gid, 10, 64)
+	systemGroups := make([]string, 0, len(groups))
 
-
-	return User{
-		UserId:     int(userId),
-		GroupId:    int(groupId),
-		HomeFolder: u.HomeDir,
-	}, nil
-}
-
-func (s UnixService) Delete(ctx context.Context, userName string) error {
-	cmd := exec.CommandContext(
-		ctx,
-		DeleteCommand,
-		"-f",
-		"-r",
-		userName,
-	)
-
-	err := cmd.Run()
-
-	if status := cmd.ProcessState.ExitCode(); status != 0 {
-		err, ok := deleteCommandFail[status]
-
-		if !ok {
-			return ErrCommandFailed
+	for _, id := range groups {
+		group, err := user.LookupGroupId(id)
+		if err != nil {
+			return nil, err
 		}
 
-		if s.logger != nil {
-			s.logger.Print("error while running the delete user command, Exit Status: %d, Error: %v", status, err)
-		}
-
-		return err
+		systemGroups = append(systemGroups, group.Name)
 	}
 
-	if err != nil {
-		if s.logger != nil {
-			s.logger.Print("error while running the delete user command: %v", err)
-		}
+	s.groups = mapSystemGroups(systemGroups, s.invertedGroups)
 
-		return ErrCommandFailed
-	}
-
-	return nil
+	return s.groups, nil
 }

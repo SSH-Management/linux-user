@@ -2,123 +2,99 @@ package user
 
 import (
 	"context"
-	"fmt"
-	"os/exec"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	mocks "github.com/SSH-Management/linux-user/__mocks__"
+	"github.com/SSH-Management/linux-user/tests"
+	"github.com/stretchr/testify/require"
 )
 
-func deleteUser(t *testing.T, username string) {
-	cmd := exec.CommandContext(
-		context.Background(),
-		DeleteCommand,
-		"-f",
-		"-r",
-		username,
-	)
 
-	err := cmd.Run()
-	if err != nil {
-		t.Errorf("Error while deleting user: %v\n", err)
-		t.FailNow()
-	}
-}
-
-func createUser(t *testing.T, username string) {
-	cmd := exec.CommandContext(
-		context.Background(),
-		AddCommand,
-		"--create-home",
-		"--password",
-		"password",
-		"--shell",
-		"/bin/sh",
-		"--user-group",
-		username,
-	)
-
-	err := cmd.Run()
-	if err != nil {
-		t.Errorf("Error while creating user: %v\n", err)
-		t.FailNow()
-	}
-}
-
-func TestCreateUser_Success(t *testing.T) {
+func TestGetUserGroups(t *testing.T) {
 	t.Parallel()
-	assert := require.New(t)
 
 	dto := &mocks.User{}
-	u := &UnixService{}
+	assert := require.New(t)
 
-	defer deleteUser(t, dto.GetUsername())
+	t.Cleanup(func() {
+		tests.DeleteUser(t, dto.GetUsername())
+	})
 
-	linuxUser, err := u.Create(context.Background(), dto)
+	tests.CreateUser(t, dto.GetUsername(), "sudo")
+
+	u := User{
+		Username: dto.GetUsername(),
+	}
+
+	groups, err := u.GetSystemGroups(context.Background())
 
 	assert.NoError(err)
-	assert.Equal("/home/"+dto.GetUsername(), linuxUser.HomeFolder)
-	assert.GreaterOrEqual(linuxUser.UserId, 1000)
+	assert.NotEmpty(groups)
+	assert.Contains(groups, "sudo")
+	assert.Contains(groups, dto.GetUsername())
 }
 
-func TestCreateUser_AlreadyExists(t *testing.T) {
+func TestGetUserGroups_MappedGroups(t *testing.T) {
 	t.Parallel()
+
+	dto := &mocks.User{}
 	assert := require.New(t)
 
-	strErr := fmt.Sprintf("error while running the create user command, Exit Status: %d, Error: %v", 9, ErrUserAlreadyExists)
+	t.Cleanup(func() {
+		tests.DeleteUser(t, dto.GetUsername())
+	})
 
-	logger := mocks.NewLogger()
-	dto := &mocks.User{}
-	u := &UnixService{
-		logger: logger,
+	tests.CreateUser(t, dto.GetUsername(), "sudo")
+
+	u := User{
+		Username: dto.GetUsername(),
+		invertedGroups: map[string]string{
+			"sudo": "my_sudo_map",
+		},
 	}
 
-	createUser(t, dto.GetUsername())
-	defer deleteUser(t, dto.GetUsername())
+	groups, err := u.GetSystemGroups(context.Background())
 
-	_, err := u.Create(context.Background(), dto)
-
-	assert.Error(err)
-	assert.ErrorIs(err, ErrUserAlreadyExists)
-
-	assert.Equal(logger.Len(), 1)
-	assert.Equal(strErr, logger.Data()[0])
-}
-
-func TestDeleteUser_Success(t *testing.T) {
-	t.Parallel()
-	assert := require.New(t)
-
-	logger := mocks.NewLogger()
-	dto := &mocks.User{}
-	u := &UnixService{
-		logger: logger,
-	}
-
-	createUser(t, dto.GetUsername())
-
-	assert.NoError(u.Delete(context.Background(), dto.GetUsername()))
+	assert.NoError(err)
+	assert.NotEmpty(groups)
+	assert.NotContains(groups, "sudo")
+	assert.Contains(groups, dto.GetUsername())
+	assert.Contains(groups, "my_sudo_map")
 }
 
 
-func TestDeleteUser_UserDoesNotExist(t *testing.T) {
+func TestGetUserGroups_UserNotFound(t *testing.T) {
 	t.Parallel()
+
+	dto := &mocks.User{}
 	assert := require.New(t)
 
-	strErr := fmt.Sprintf("error while running the delete user command, Exit Status: %d, Error: %v", 6, ErrUserDoesNotExist)
-
-	logger := mocks.NewLogger()
-	dto := &mocks.User{}
-	u := &UnixService{
-		logger: logger,
+	u := User{
+		Username: dto.GetUsername(),
 	}
 
-	err := u.Delete(context.Background(), dto.GetUsername())
+	groups, err := u.GetSystemGroups(context.Background())
 
+	assert.Nil(groups)
 	assert.Error(err)
 	assert.ErrorIs(err, ErrUserDoesNotExist)
-	assert.Equal(logger.Len(), 1)
-	assert.Equal(strErr, logger.Data()[0])
 }
+
+
+func TestGetUserGroups_UsernameEmpty(t *testing.T) {
+	t.Parallel()
+
+	assert := require.New(t)
+
+	u := User{
+		Username: "",
+	}
+
+	groups, err := u.GetSystemGroups(context.Background())
+
+	assert.Nil(groups)
+	assert.Error(err)
+	assert.ErrorIs(err, ErrUsernameEmpty)
+}
+
+
