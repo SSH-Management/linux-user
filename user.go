@@ -37,7 +37,7 @@ func (s User) GetSystemGroups(ctx context.Context) ([]string, error) {
 
 	groups, err := u.GroupIds()
 	if err != nil {
-		return nil, ErrGroupDoesNotExist
+		return nil, err
 	}
 
 	systemGroups := make([]string, 0, len(groups))
